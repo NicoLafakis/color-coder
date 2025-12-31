@@ -10,7 +10,12 @@ import {
   Unlock,
   Shuffle
 } from 'lucide-react';
-import { colord } from 'colord';
+import { colord, extend } from 'colord';
+import harmonies from 'colord/plugins/harmonies';
+import names from 'colord/plugins/names';
+
+// Extend colord with necessary plugins
+extend([harmonies, names]);
 import ColorStrip from './ColorStrip';
 import ContrastChecker from './ContrastChecker';
 import ShadesViewer from './ShadesViewer';
@@ -30,7 +35,7 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
   const [favoriteColors, setFavoriteColors] = useState([]);
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [draggedOverIndex, setDraggedOverIndex] = useState(null);
-  const [generationMode, setGenerationMode] = useState('random'); // random, monochromatic, complementary, triadic
+  const [generationMode, setGenerationMode] = useState('random'); // random, monotone, duotone, tritone
   const [showDesignPrinciples, setShowDesignPrinciples] = useState(false);
 
   // Generate a random color
@@ -49,7 +54,15 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
     setTimeout(() => {
       setColors(currentColors => {
         let newColors = [];
-        const baseColor = currentColors.length > 0 ? (keepLocked ? (currentColors[lockedColors.indexOf(true)] || currentColors[0]) : currentColors[0]) : generateRandomColor();
+
+        // Decide the seed color
+        const firstLockedIndex = lockedColors.indexOf(true);
+        const hasLocked = firstLockedIndex !== -1;
+
+        // If we "keep locked" but none are locked, or if we don't keep locked, generate a new seed base
+        const baseColor = (keepLocked && hasLocked)
+          ? currentColors[firstLockedIndex]
+          : generateRandomColor();
 
         if (generationMode === 'random') {
           for (let i = 0; i < paletteSize; i++) {
@@ -59,23 +72,43 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
               newColors.push(generateRandomColor());
             }
           }
-        } else {
-          // Harmony modes
-          const harmony = colord(baseColor).harmonies(generationMode);
-          const baseHarmonyColors = harmony.map(c => c.toHex());
+          return newColors;
+        }
 
-          // Fill up to paletteSize
-          for (let i = 0; i < paletteSize; i++) {
-            if (keepLocked && lockedColors[i] && currentColors[i]) {
-              newColors.push(currentColors[i]);
+        // Harmony modes (Monotone, Duotone, Tritone)
+        const harmonyType = generationMode === 'monotone' ? 'monochromatic' :
+          generationMode === 'duotone' ? 'complementary' :
+            generationMode === 'tritone' ? 'triadic' : 'complementary';
+
+        let harmonyRes = [];
+        try {
+          harmonyRes = colord(baseColor).harmonies(harmonyType);
+          if (!harmonyRes || !Array.isArray(harmonyRes)) {
+            harmonyRes = [colord(baseColor)];
+          }
+        } catch (e) {
+          console.error("Harmony generation failed:", e);
+          harmonyRes = [colord(baseColor)];
+        }
+
+        const baseHarmonyColors = harmonyRes.map(c => c.toHex());
+
+        for (let i = 0; i < paletteSize; i++) {
+          if (keepLocked && lockedColors[i] && currentColors[i]) {
+            newColors.push(currentColors[i]);
+          } else {
+            if (i < baseHarmonyColors.length) {
+              newColors.push(baseHarmonyColors[i]);
             } else {
-              // Cycle through harmony colors or generate variations
-              if (i < baseHarmonyColors.length) {
-                newColors.push(baseHarmonyColors[i]);
+              // Create variations for the remaining slots
+              const seedIndex = i % baseHarmonyColors.length;
+              const seed = baseHarmonyColors[seedIndex];
+              const shift = Math.floor(i / baseHarmonyColors.length) * 15;
+
+              if (i % 2 === 0) {
+                newColors.push(colord(seed).lighten(shift / 100).toHex());
               } else {
-                // Generate a variation of the base for additional slots
-                const shift = (i - baseHarmonyColors.length + 1) * 10;
-                newColors.push(colord(baseColor).lighten(shift / 100).toHex());
+                newColors.push(colord(seed).darken(shift / 100).toHex());
               }
             }
           }
@@ -340,9 +373,9 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
             <div className="flex bg-gray-100 p-1 rounded-lg ml-2">
               {[
                 { id: 'random', label: 'Random', icon: <Shuffle className="w-3.5 h-3.5" /> },
-                { id: 'monochromatic', label: 'Mono', icon: <PaletteIcon className="w-3.5 h-3.5" /> },
-                { id: 'complementary', label: 'Duo', icon: <Layout className="w-3.5 h-3.5" /> },
-                { id: 'triadic', label: 'Tri', icon: <Info className="w-3.5 h-3.5" /> }
+                { id: 'monotone', label: 'Monotone', icon: <PaletteIcon className="w-3.5 h-3.5" /> },
+                { id: 'duotone', label: 'Duotone', icon: <Layout className="w-3.5 h-3.5" /> },
+                { id: 'tritone', label: 'Tritone', icon: <Info className="w-3.5 h-3.5" /> }
               ].map(mode => (
                 <button
                   key={mode.id}
