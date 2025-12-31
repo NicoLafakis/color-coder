@@ -55,15 +55,13 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
       setColors(currentColors => {
         let newColors = [];
 
-        // Decide the seed color
-        const firstLockedIndex = lockedColors.indexOf(true);
-        const hasLocked = firstLockedIndex !== -1;
+        // 1. Determine the Anchor color and its original position
+        // If keepLocked is true and there are locked colors, use the first one as anchor
+        // Otherwise, generate a fresh random seed as the anchor
+        const anchorIndex = (keepLocked) ? lockedColors.indexOf(true) : -1;
+        const anchorColor = (anchorIndex !== -1) ? currentColors[anchorIndex] : generateRandomColor();
 
-        // If we "keep locked" but none are locked, or if we don't keep locked, generate a new seed base
-        const baseColor = (keepLocked && hasLocked)
-          ? currentColors[firstLockedIndex]
-          : generateRandomColor();
-
+        // 2. Random mode - standard behavior
         if (generationMode === 'random') {
           for (let i = 0; i < paletteSize; i++) {
             if (keepLocked && lockedColors[i] && currentColors[i]) {
@@ -75,44 +73,50 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
           return newColors;
         }
 
-        // Harmony modes (Monotone, Duotone, Tritone)
-        const harmonyType = generationMode === 'monotone' ? 'monochromatic' :
-          generationMode === 'duotone' ? 'complementary' :
-            generationMode === 'tritone' ? 'triadic' : 'complementary';
+        // 3. Harmony modes (Monotone, Duotone, Tritone)
+        const harmonyTypeMap = {
+          'monotone': 'monochromatic',
+          'duotone': 'complementary',
+          'tritone': 'triadic'
+        };
+        const harmonyType = harmonyTypeMap[generationMode] || 'monochromatic';
 
         let harmonyRes = [];
         try {
-          harmonyRes = colord(baseColor).harmonies(harmonyType);
-          if (!harmonyRes || !Array.isArray(harmonyRes)) {
-            harmonyRes = [colord(baseColor)];
-          }
+          harmonyRes = colord(anchorColor).harmonies(harmonyType);
+          if (!harmonyRes || !Array.isArray(harmonyRes)) harmonyRes = [colord(anchorColor)];
         } catch (e) {
-          console.error("Harmony generation failed:", e);
-          harmonyRes = [colord(baseColor)];
+          harmonyRes = [colord(anchorColor)];
         }
 
-        const baseHarmonyColors = harmonyRes.map(c => c.toHex());
+        const baseHarmonyHexes = harmonyRes.map(c => c.toHex());
+        const H = baseHarmonyHexes.length;
 
+        // 4. Construct the new palette relative to the anchor
         for (let i = 0; i < paletteSize; i++) {
+          // Keep locked colors as they are
           if (keepLocked && lockedColors[i] && currentColors[i]) {
             newColors.push(currentColors[i]);
-          } else {
-            if (i < baseHarmonyColors.length) {
-              newColors.push(baseHarmonyColors[i]);
-            } else {
-              // Create variations for the remaining slots
-              const seedIndex = i % baseHarmonyColors.length;
-              const seed = baseHarmonyColors[seedIndex];
-              const shift = Math.floor(i / baseHarmonyColors.length) * 15;
-
-              if (i % 2 === 0) {
-                newColors.push(colord(seed).lighten(shift / 100).toHex());
-              } else {
-                newColors.push(colord(seed).darken(shift / 100).toHex());
-              }
-            }
+            continue;
           }
+
+          // Calculate "harmonic distance" from anchor position
+          // If no anchor was set, assume index 0 was the anchor for rhythm
+          const refIndex = anchorIndex !== -1 ? anchorIndex : 0;
+          const relativePos = (i - refIndex + (H * 10)) % H;
+
+          let colorBox = colord(baseHarmonyHexes[relativePos]);
+
+          // Add variation for larger palettes (5+ colors) so we don't just repeat 2 colors
+          if (paletteSize > H) {
+            const variantType = Math.floor(i / H);
+            if (variantType === 1) colorBox = colorBox.lighten(0.15).saturate(0.1);
+            if (variantType === 2) colorBox = colorBox.darken(0.15).desaturate(0.1);
+          }
+
+          newColors.push(colorBox.toHex());
         }
+
         return newColors;
       });
       setIsGenerating(false);
