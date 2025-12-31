@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  RefreshCw, 
-  Save, 
-  Heart, 
-  Download, 
-  Share2, 
+import {
+  RefreshCw,
+  Save,
+  Heart,
+  Download,
+  Share2,
   Settings,
   Lock,
   Unlock,
@@ -14,6 +14,8 @@ import { colord } from 'colord';
 import ColorStrip from './ColorStrip';
 import ContrastChecker from './ContrastChecker';
 import ShadesViewer from './ShadesViewer';
+import DesignPrinciples from './DesignPrinciples';
+import { Palette as PaletteIcon, Layout, Info } from 'lucide-react';
 
 const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
   const [colors, setColors] = useState([]);
@@ -28,6 +30,8 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
   const [favoriteColors, setFavoriteColors] = useState([]);
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [draggedOverIndex, setDraggedOverIndex] = useState(null);
+  const [generationMode, setGenerationMode] = useState('random'); // random, monochromatic, complementary, triadic
+  const [showDesignPrinciples, setShowDesignPrinciples] = useState(false);
 
   // Generate a random color
   const generateRandomColor = () => {
@@ -40,16 +44,40 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
   // Generate initial palette
   const generatePalette = useCallback((keepLocked = false) => {
     setIsGenerating(true);
-    
+
     // Small delay for animation effect
     setTimeout(() => {
       setColors(currentColors => {
-        const newColors = [];
-        for (let i = 0; i < paletteSize; i++) {
-          if (keepLocked && lockedColors[i] && currentColors[i]) {
-            newColors.push(currentColors[i]); // Keep locked color
-          } else {
-            newColors.push(generateRandomColor());
+        let newColors = [];
+        const baseColor = currentColors.length > 0 ? (keepLocked ? (currentColors[lockedColors.indexOf(true)] || currentColors[0]) : currentColors[0]) : generateRandomColor();
+
+        if (generationMode === 'random') {
+          for (let i = 0; i < paletteSize; i++) {
+            if (keepLocked && lockedColors[i] && currentColors[i]) {
+              newColors.push(currentColors[i]);
+            } else {
+              newColors.push(generateRandomColor());
+            }
+          }
+        } else {
+          // Harmony modes
+          const harmony = colord(baseColor).harmonies(generationMode);
+          const baseHarmonyColors = harmony.map(c => c.toHex());
+
+          // Fill up to paletteSize
+          for (let i = 0; i < paletteSize; i++) {
+            if (keepLocked && lockedColors[i] && currentColors[i]) {
+              newColors.push(currentColors[i]);
+            } else {
+              // Cycle through harmony colors or generate variations
+              if (i < baseHarmonyColors.length) {
+                newColors.push(baseHarmonyColors[i]);
+              } else {
+                // Generate a variation of the base for additional slots
+                const shift = (i - baseHarmonyColors.length + 1) * 10;
+                newColors.push(colord(baseColor).lighten(shift / 100).toHex());
+              }
+            }
           }
         }
         return newColors;
@@ -57,7 +85,7 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
       setIsGenerating(false);
       setShowSpacebarHint(false);
     }, 200);
-  }, [lockedColors, paletteSize]);
+  }, [lockedColors, paletteSize, generationMode]);
 
   // Initialize with first palette
   useEffect(() => {
@@ -94,7 +122,7 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
       if (event.ctrlKey && !event.shiftKey && !event.altKey) {
         const numberKeys = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0'];
         const keyIndex = numberKeys.indexOf(event.code);
-        
+
         if (keyIndex !== -1) {
           event.preventDefault();
           const colorIndex = keyIndex; // 0-based index
@@ -140,10 +168,10 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
   // Remove a color from palette
   const removeColor = (index) => {
     if (colors.length <= 3) return; // Minimum 3 colors
-    
+
     const newColors = colors.filter((_, i) => i !== index);
     const newLockedColors = lockedColors.filter((_, i) => i !== index);
-    
+
     setColors(newColors);
     setLockedColors(newLockedColors);
     setPaletteSize(newColors.length);
@@ -174,17 +202,17 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
   const toggleFavorite = (color) => {
     const colorUpper = color.toUpperCase();
     const isCurrentlyFavorite = favoriteColors.includes(colorUpper);
-    
+
     let newFavorites;
     if (isCurrentlyFavorite) {
       newFavorites = favoriteColors.filter(fav => fav !== colorUpper);
     } else {
       newFavorites = [...favoriteColors, colorUpper];
     }
-    
+
     setFavoriteColors(newFavorites);
     localStorage.setItem('favoriteColors', JSON.stringify(newFavorites));
-    
+
     // Show feedback
     const action = isCurrentlyFavorite ? 'removed from' : 'added to';
     setKeyboardFeedback(`Color ${action} favorites`);
@@ -204,7 +232,7 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
 
   const handleDrop = (e, dropIndex) => {
     e.preventDefault();
-    
+
     if (draggedIndex === null || draggedIndex === dropIndex) {
       setDraggedIndex(null);
       setDraggedOverIndex(null);
@@ -213,17 +241,17 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
 
     const newColors = [...colors];
     const newLockedColors = [...lockedColors];
-    
+
     // Move color and locked state
     const draggedColor = newColors[draggedIndex];
     const draggedLocked = newLockedColors[draggedIndex];
-    
+
     newColors.splice(draggedIndex, 1);
     newLockedColors.splice(draggedIndex, 1);
-    
+
     newColors.splice(dropIndex, 0, draggedColor);
     newLockedColors.splice(dropIndex, 0, draggedLocked);
-    
+
     setColors(newColors);
     setLockedColors(newLockedColors);
     setDraggedIndex(null);
@@ -258,7 +286,7 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
       created: new Date().toISOString(),
       format: 'hex'
     };
-    
+
     const dataStr = JSON.stringify(paletteData, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(dataBlob);
@@ -272,7 +300,7 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
   // Share palette
   const sharePalette = async () => {
     const paletteUrl = `https://colorhunt.co/palette/${colors.join('-').replace(/#/g, '')}`;
-    
+
     if (navigator.share) {
       try {
         await navigator.share({
@@ -304,9 +332,31 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
             <h1 className="text-xl font-bold text-gray-900">Color Generator</h1>
             {showSpacebarHint && (
               <div className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
-                Press <kbd className="bg-white px-2 py-1 rounded shadow text-xs">SPACE</kbd> to generate palettes!
+                Press <kbd className="bg-white px-2 py-1 rounded shadow text-xs">SPACE</kbd> to generate!
               </div>
             )}
+
+            {/* Mode Select */}
+            <div className="flex bg-gray-100 p-1 rounded-lg ml-2">
+              {[
+                { id: 'random', label: 'Random', icon: <Shuffle className="w-3.5 h-3.5" /> },
+                { id: 'monochromatic', label: 'Mono', icon: <PaletteIcon className="w-3.5 h-3.5" /> },
+                { id: 'complementary', label: 'Duo', icon: <Layout className="w-3.5 h-3.5" /> },
+                { id: 'triadic', label: 'Tri', icon: <Info className="w-3.5 h-3.5" /> }
+              ].map(mode => (
+                <button
+                  key={mode.id}
+                  onClick={() => setGenerationMode(mode.id)}
+                  className={`flex items-center space-x-1 px-3 py-1 rounded-md text-xs font-medium transition-all ${generationMode === mode.id
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                >
+                  {mode.icon}
+                  <span>{mode.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="flex items-center space-x-2">
@@ -321,6 +371,16 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
               ) : (
                 <Lock className="w-5 h-5 text-gray-600" />
               )}
+            </button>
+
+            {/* Design Principles Toggle */}
+            <button
+              onClick={() => setShowDesignPrinciples(true)}
+              className="flex items-center space-x-2 bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-200"
+              title="View Design Insights & Principles"
+            >
+              <Layout className="w-4 h-4" />
+              <span className="font-medium">Design Insights</span>
             </button>
 
             {/* Generate Button */}
@@ -439,6 +499,14 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
             setSelectedColorIndex(null);
           }}
           onSelectColor={selectColorFromShades}
+        />
+      )}
+
+      {/* Design Principles Modal */}
+      {showDesignPrinciples && (
+        <DesignPrinciples
+          colors={colors}
+          onClose={() => setShowDesignPrinciples(false)}
         />
       )}
     </div>
