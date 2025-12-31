@@ -37,6 +37,7 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
   const [draggedOverIndex, setDraggedOverIndex] = useState(null);
   const [generationMode, setGenerationMode] = useState('random'); // random, monotone, duotone, tritone
   const [showDesignPrinciples, setShowDesignPrinciples] = useState(false);
+  const [primarySeed, setPrimarySeed] = useState('#6366f1');
 
   // Generate a random color
   const generateRandomColor = () => {
@@ -47,7 +48,7 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
   };
 
   // Generate initial palette
-  const generatePalette = useCallback((keepLocked = false) => {
+  const generatePalette = useCallback((keepLocked = false, forcedSeed = null) => {
     setIsGenerating(true);
 
     // Small delay for animation effect
@@ -55,19 +56,32 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
       setColors(currentColors => {
         let newColors = [];
 
-        // 1. Determine the Anchor color and its original position
-        // If keepLocked is true and there are locked colors, use the first one as anchor
-        // Otherwise, generate a fresh random seed as the anchor
+        // 1. Determine the Anchor color
+        // If a forcedSeed is provided (from the Master Picker), use that.
+        // Otherwise, if keepLocked is true and there are locked colors, use the first one as anchor.
+        // Final fallback: generate a fresh random seed.
         const anchorIndex = (keepLocked) ? lockedColors.indexOf(true) : -1;
-        const anchorColor = (anchorIndex !== -1) ? currentColors[anchorIndex] : generateRandomColor();
+        let anchorColor = forcedSeed;
+
+        if (!anchorColor) {
+          anchorColor = (anchorIndex !== -1) ? currentColors[anchorIndex] : generateRandomColor();
+        }
+
+        // Update the primary seed state if we generated a random one or used a locked one
+        if (!forcedSeed) setPrimarySeed(anchorColor);
 
         // 2. Random mode - standard behavior
         if (generationMode === 'random') {
           for (let i = 0; i < paletteSize; i++) {
-            if (keepLocked && lockedColors[i] && currentColors[i]) {
+            if (keepLocked && lockedColors[i] && currentColors[i] && !forcedSeed) {
               newColors.push(currentColors[i]);
             } else {
-              newColors.push(generateRandomColor());
+              // In random mode, if forcedSeed, make it the first color, others random
+              if (forcedSeed && i === 0) {
+                newColors.push(forcedSeed);
+              } else {
+                newColors.push(generateRandomColor());
+              }
             }
           }
           return newColors;
@@ -94,20 +108,20 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
 
         // 4. Construct the new palette relative to the anchor
         for (let i = 0; i < paletteSize; i++) {
-          // Keep locked colors as they are
-          if (keepLocked && lockedColors[i] && currentColors[i]) {
+          // Keep locked colors as they are (unless we are forcing a seed change)
+          if (keepLocked && lockedColors[i] && currentColors[i] && !forcedSeed) {
             newColors.push(currentColors[i]);
             continue;
           }
 
           // Calculate "harmonic distance" from anchor position
-          // If no anchor was set, assume index 0 was the anchor for rhythm
-          const refIndex = anchorIndex !== -1 ? anchorIndex : 0;
+          // If no anchor was set (random mode fallback or forced seed), assume index 0 is anchor
+          const refIndex = (forcedSeed) ? 0 : (anchorIndex !== -1 ? anchorIndex : 0);
           const relativePos = (i - refIndex + (H * 10)) % H;
 
           let colorBox = colord(baseHarmonyHexes[relativePos]);
 
-          // Add variation for larger palettes (5+ colors) so we don't just repeat 2 colors
+          // Add variation for larger palettes (5+ colors)
           if (paletteSize > H) {
             const variantType = Math.floor(i / H);
             if (variantType === 1) colorBox = colorBox.lighten(0.15).saturate(0.1);
@@ -123,6 +137,13 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
       setShowSpacebarHint(false);
     }, 200);
   }, [lockedColors, paletteSize, generationMode]);
+
+  const handleMasterColorChange = (e) => {
+    const newColor = e.target.value;
+    setPrimarySeed(newColor);
+    // If we change the master color, we regenerate everything anchored to it
+    generatePalette(true, newColor);
+  };
 
   // Initialize with first palette
   useEffect(() => {
@@ -372,6 +393,20 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
                 Press <kbd className="bg-white px-2 py-1 rounded shadow text-xs">SPACE</kbd> to generate!
               </div>
             )}
+
+            {/* Master Primary Picker */}
+            <div className="flex items-center space-x-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm ml-2">
+              <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Primary Seed</span>
+              <div className="relative w-8 h-8 rounded-md overflow-hidden border border-gray-100 shadow-inner group">
+                <input
+                  type="color"
+                  value={primarySeed}
+                  onChange={handleMasterColorChange}
+                  className="absolute inset-0 w-[150%] h-[150%] -translate-x-[15%] -translate-y-[15%] cursor-pointer border-none p-0 outline-none"
+                />
+              </div>
+              <span className="text-xs font-mono font-bold text-gray-600 uppercase">{primarySeed}</span>
+            </div>
 
             {/* Mode Select */}
             <div className="flex bg-gray-100 p-1 rounded-lg ml-2">
