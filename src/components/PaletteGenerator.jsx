@@ -20,7 +20,8 @@ import ColorStrip from './ColorStrip';
 import ContrastChecker from './ContrastChecker';
 import ShadesViewer from './ShadesViewer';
 import DesignPrinciples from './DesignPrinciples';
-import { Palette as PaletteIcon, Layout, Info, HelpCircle } from 'lucide-react';
+import PaletteExportModal from './PaletteExportModal';
+import { Palette as PaletteIcon, Layout, Info, HelpCircle, FileText } from 'lucide-react';
 
 const InfoBadge = ({ content, title }) => (
   <div className="group relative inline-flex items-center">
@@ -49,6 +50,7 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
   const [draggedOverIndex, setDraggedOverIndex] = useState(null);
   const [generationMode, setGenerationMode] = useState('random'); // random, monotone, duotone, tritone
   const [showDesignPrinciples, setShowDesignPrinciples] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [primarySeed, setPrimarySeed] = useState('#6366f1');
 
   // Generate a random color
@@ -528,10 +530,20 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
               {/* Save Button */}
               <button
                 onClick={handleSavePalette}
-                className="hidden xs:flex items-center space-x-1 bg-emerald-600 text-white px-3 py-2 rounded-lg hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-50"
+                className="hidden sm:flex items-center space-x-1 bg-emerald-600 text-white px-3 py-2 rounded-lg hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-50"
               >
                 <Save className="w-3.5 h-3.5" />
                 <span className="font-bold text-xs uppercase tracking-tight">Save</span>
+              </button>
+
+              {/* Export for AI Button */}
+              <button
+                onClick={() => setShowExportModal(true)}
+                className="flex items-center space-x-1.5 bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition-colors shadow-lg shadow-purple-100"
+                title="Export design system for AI coding assistants"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span className="font-bold text-xs uppercase tracking-tight hidden md:inline">Export AI</span>
               </button>
             </div>
           </div>
@@ -615,14 +627,20 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
       }
 
       {/* Design Principles Modal */}
-      {
-        showDesignPrinciples && (
-          <DesignPrinciples
-            colors={colors}
-            onClose={() => setShowDesignPrinciples(false)}
-          />
-        )
-      }
+      {showDesignPrinciples && (
+        <DesignPrinciples
+          colors={colors}
+          onClose={() => setShowDesignPrinciples(false)}
+        />
+      )}
+
+      {/* Export for AI Modal */}
+      {showExportModal && (
+        <PaletteExportModal
+          colors={colors}
+          onClose={() => setShowExportModal(false)}
+        />
+      )}
     </div >
   );
 };
