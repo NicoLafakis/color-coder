@@ -20,7 +20,19 @@ import ColorStrip from './ColorStrip';
 import ContrastChecker from './ContrastChecker';
 import ShadesViewer from './ShadesViewer';
 import DesignPrinciples from './DesignPrinciples';
-import { Palette as PaletteIcon, Layout, Info } from 'lucide-react';
+import { Palette as PaletteIcon, Layout, Info, HelpCircle } from 'lucide-react';
+
+const InfoBadge = ({ content, title }) => (
+  <div className="group relative inline-flex items-center">
+    <button className="p-1 rounded-full hover:bg-gray-100 transition-colors text-gray-300 hover:text-indigo-500">
+      <HelpCircle className="w-3.5 h-3.5" />
+    </button>
+    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 p-4 bg-gray-900/95 backdrop-blur-md text-white text-xs rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-[100] border border-white/10 pointer-events-none origin-top">
+      {title && <div className="font-black uppercase text-[10px] tracking-[0.2em] text-indigo-400 mb-2 border-b border-white/5 pb-2">{title}</div>}
+      <p className="leading-relaxed font-medium text-gray-300">{content}</p>
+    </div>
+  </div>
+);
 
 const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
   const [colors, setColors] = useState([]);
@@ -106,27 +118,39 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
         const baseHarmonyHexes = harmonyRes.map(c => c.toHex());
         const H = baseHarmonyHexes.length;
 
-        // 4. Construct the new palette relative to the anchor
+        // 4. Construct the new palette relative to the anchor using Role-Based math
+        // This ensures every slot has a unique L/S profile even if the harmony repeats
+        const roles = [
+          { l: -0.20, s: -0.10 }, // 0: Deep
+          { l: 0.25, s: -0.15 },  // 1: Muted
+          { l: 0, s: 0 },         // 2: The Pure Base
+          { l: -0.10, s: 0.15 },  // 3: Contrast
+          { l: 0.35, s: 0.10 }   // 4: Highlight
+        ];
+
         for (let i = 0; i < paletteSize; i++) {
-          // Keep locked colors as they are (unless we are forcing a seed change)
+          // Keep locked colors as they are
           if (keepLocked && lockedColors[i] && currentColors[i] && !forcedSeed) {
             newColors.push(currentColors[i]);
             continue;
           }
 
           // Calculate "harmonic distance" from anchor position
-          // If no anchor was set (random mode fallback or forced seed), assume index 0 is anchor
-          const refIndex = (forcedSeed) ? 0 : (anchorIndex !== -1 ? anchorIndex : 0);
+          // We distribute the H base colors across the 5 slots
+          const refIndex = (forcedSeed) ? 2 : (anchorIndex !== -1 ? anchorIndex : 2);
           const relativePos = (i - refIndex + (H * 10)) % H;
 
           let colorBox = colord(baseHarmonyHexes[relativePos]);
 
-          // Add variation for larger palettes (5+ colors)
-          if (paletteSize > H) {
-            const variantType = Math.floor(i / H);
-            if (variantType === 1) colorBox = colorBox.lighten(0.15).saturate(0.1);
-            if (variantType === 2) colorBox = colorBox.darken(0.15).desaturate(0.1);
-          }
+          // Apply the Role-based variation
+          // This creates a cohesive "Design System" feel vs just random shades
+          const role = roles[i % roles.length];
+
+          if (role.l > 0) colorBox = colorBox.lighten(role.l);
+          else if (role.l < 0) colorBox = colorBox.darken(Math.abs(role.l));
+
+          if (role.s > 0) colorBox = colorBox.saturate(role.s);
+          else if (role.s < 0) colorBox = colorBox.desaturate(Math.abs(role.s));
 
           newColors.push(colorBox.toHex());
         }
@@ -396,7 +420,13 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
 
             {/* Master Primary Picker */}
             <div className="flex items-center space-x-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm ml-2">
-              <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Primary Seed</span>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Primary Seed</span>
+                <InfoBadge
+                  title="The Anchor"
+                  content="This is your brand's DNA. Changing this HEX value will automatically realign every shade in the palette to maintain mathematical harmony."
+                />
+              </div>
               <div className="relative w-8 h-8 rounded-md overflow-hidden border border-gray-100 shadow-inner group">
                 <input
                   type="color"
@@ -409,61 +439,85 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
             </div>
 
             {/* Mode Select */}
-            <div className="flex bg-gray-100 p-1 rounded-lg ml-2">
-              {[
-                { id: 'random', label: 'Random', icon: <Shuffle className="w-3.5 h-3.5" /> },
-                { id: 'monotone', label: 'Monotone', icon: <PaletteIcon className="w-3.5 h-3.5" /> },
-                { id: 'duotone', label: 'Duotone', icon: <Layout className="w-3.5 h-3.5" /> },
-                { id: 'tritone', label: 'Tritone', icon: <Info className="w-3.5 h-3.5" /> }
-              ].map(mode => (
-                <button
-                  key={mode.id}
-                  onClick={() => setGenerationMode(mode.id)}
-                  className={`flex items-center space-x-1 px-3 py-1 rounded-md text-xs font-medium transition-all ${generationMode === mode.id
-                    ? 'bg-white text-indigo-600 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                >
-                  {mode.icon}
-                  <span>{mode.label}</span>
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <div className="flex bg-gray-100 p-1 rounded-lg ml-2">
+                {[
+                  { id: 'random', label: 'Random', icon: <Shuffle className="w-3.5 h-3.5" /> },
+                  { id: 'monotone', label: 'Monotone', icon: <PaletteIcon className="w-3.5 h-3.5" /> },
+                  { id: 'duotone', label: 'Duotone', icon: <Layout className="w-3.5 h-3.5" /> },
+                  { id: 'tritone', label: 'Tritone', icon: <Info className="w-3.5 h-3.5" /> }
+                ].map(mode => (
+                  <button
+                    key={mode.id}
+                    onClick={() => setGenerationMode(mode.id)}
+                    className={`flex items-center space-x-1 px-3 py-1 rounded-md text-xs font-medium transition-all ${generationMode === mode.id
+                      ? 'bg-white text-indigo-600 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                  >
+                    {mode.icon}
+                    <span>{mode.label}</span>
+                  </button>
+                ))}
+              </div>
+              <InfoBadge
+                title="Harmony Modes"
+                content="Switch between algorithms. Monotone uses value shifts; Duotone uses complements (180°); Tritone uses balanced triads (120°)."
+              />
             </div>
           </div>
 
           <div className="flex items-center space-x-2">
             {/* Lock All / Unlock All */}
-            <button
-              onClick={() => setLockedColors(lockedColors.every(locked => locked) ? new Array(5).fill(false) : new Array(5).fill(true))}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              title={lockedColors.every(locked => locked) ? 'Unlock all colors' : 'Lock all colors'}
-            >
-              {lockedColors.every(locked => locked) ? (
-                <Unlock className="w-5 h-5 text-gray-600" />
-              ) : (
-                <Lock className="w-5 h-5 text-gray-600" />
-              )}
-            </button>
+            <div className="flex items-center space-x-1 border-r border-gray-200 pr-2 mr-2">
+              <button
+                onClick={() => setLockedColors(lockedColors.every(locked => locked) ? new Array(5).fill(false) : new Array(5).fill(true))}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title={lockedColors.every(locked => locked) ? 'Unlock all colors' : 'Lock all colors'}
+              >
+                {lockedColors.every(locked => locked) ? (
+                  <Unlock className="w-5 h-5 text-gray-600" />
+                ) : (
+                  <Lock className="w-5 h-5 text-gray-600" />
+                )}
+              </button>
+              <InfoBadge
+                title="Global Lock"
+                content="Freeze the entire palette to prevent any changes while you export or share."
+              />
+            </div>
 
             {/* Design Principles Toggle */}
-            <button
-              onClick={() => setShowDesignPrinciples(true)}
-              className="flex items-center space-x-2 bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-200"
-              title="View Design Insights & Principles"
-            >
-              <Layout className="w-4 h-4" />
-              <span className="font-medium">Design Insights</span>
-            </button>
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={() => setShowDesignPrinciples(true)}
+                className="flex items-center space-x-2 bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-200"
+                title="View Design Insights & Principles"
+              >
+                <Layout className="w-4 h-4" />
+                <span className="font-medium">Design Insights</span>
+              </button>
+              <InfoBadge
+                title="Strategy Mode"
+                content="Analyze WCAG 2.2 accessibility, color psychology, and professional layout archetypes for your palette."
+              />
+            </div>
 
             {/* Generate Button */}
-            <button
-              onClick={() => generatePalette(true)}
-              disabled={isGenerating}
-              className="flex items-center space-x-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:bg-indigo-400 transition-colors"
-            >
-              <RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
-              <span>Generate</span>
-            </button>
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={() => generatePalette(true)}
+                disabled={isGenerating}
+                className="flex items-center space-x-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:bg-indigo-400 transition-colors"
+              >
+                <RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
+                <span>Generate</span>
+              </button>
+              <InfoBadge
+                title="Engine Fire"
+                content="Triggers the harmonic algorithm. If colors are locked, the engine rotates around them. If not, it picks a new random seed."
+              />
+            </div>
 
             {/* Save Button */}
             <button

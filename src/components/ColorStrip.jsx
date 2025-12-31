@@ -1,13 +1,25 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Lock, Unlock, Copy, Heart, MoreHorizontal, RefreshCw, X, Eye, Layers } from 'lucide-react';
+import { Lock, Unlock, Copy, Heart, MoreHorizontal, RefreshCw, X, Eye, Layers, HelpCircle } from 'lucide-react';
 import { colord } from 'colord';
 
-const ColorStrip = ({ 
-  color, 
-  index, 
-  isLocked, 
-  onToggleLock, 
-  onColorChange, 
+const InfoBadge = ({ content, title, light = false }) => (
+  <div className="group relative inline-flex items-center ml-1">
+    <button className={`p-0.5 rounded-full transition-colors ${light ? 'text-white/40 hover:text-white hover:bg-white/10' : 'text-black/30 hover:text-indigo-600 hover:bg-black/5'}`}>
+      <HelpCircle className="w-3 h-3" />
+    </button>
+    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-4 bg-gray-900/95 backdrop-blur-md text-white text-[11px] rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-[100] border border-white/10 pointer-events-none text-left">
+      {title && <div className="font-black uppercase text-[9px] tracking-[0.2em] text-indigo-400 mb-2 border-b border-white/5 pb-2">{title}</div>}
+      <p className="leading-relaxed font-medium text-gray-300">{content}</p>
+    </div>
+  </div>
+);
+
+const ColorStrip = ({
+  color,
+  index,
+  isLocked,
+  onToggleLock,
+  onColorChange,
   onCopyColor,
   onRemoveColor,
   onCheckContrast,
@@ -37,7 +49,7 @@ const ColorStrip = ({
   // Handle copying color
   const handleCopy = async (format = 'hex') => {
     let copyValue = color;
-    
+
     switch (format) {
       case 'rgb':
         copyValue = colorObj.toRgbString();
@@ -113,9 +125,8 @@ const ColorStrip = ({
 
   return (
     <div
-      className={`relative flex-1 flex flex-col justify-between p-6 transition-all duration-300 ${
-        isGenerating && !isLocked ? 'animate-pulse' : ''
-      } ${isDraggedOver ? 'ring-2 ring-blue-400 ring-inset' : ''} ${!isGenerating ? 'cursor-grab active:cursor-grabbing' : ''}`}
+      className={`relative flex-1 flex flex-col justify-between p-6 transition-all duration-300 ${isGenerating && !isLocked ? 'animate-pulse' : ''
+        } ${isDraggedOver ? 'ring-2 ring-blue-400 ring-inset' : ''} ${!isGenerating ? 'cursor-grab active:cursor-grabbing' : ''}`}
       style={{ backgroundColor: color, color: textColor }}
       draggable={!isGenerating}
       onDragStart={(e) => onDragStart?.(e, index)}
@@ -126,30 +137,35 @@ const ColorStrip = ({
       <div className="flex items-start justify-between">
         <div className="flex space-x-1">
           {/* Lock Button */}
-          <button
-            onClick={() => onToggleLock(index)}
-            className={`p-2 rounded-full transition-all duration-200 ${
-              isLocked 
-                ? 'bg-black bg-opacity-20 backdrop-blur-sm' 
-                : 'hover:bg-black hover:bg-opacity-10'
-            }`}
-            title={isLocked ? 'Unlock color' : 'Lock color'}
-          >
-            {isLocked ? (
-              <Lock className="w-5 h-5" />
-            ) : (
-              <Unlock className="w-5 h-5 opacity-60" />
-            )}
-          </button>
+          <div className="flex items-center space-x-1">
+            <button
+              onClick={() => onToggleLock(index)}
+              className={`p-2 rounded-full transition-all duration-200 ${isLocked
+                  ? 'bg-black bg-opacity-20 backdrop-blur-sm'
+                  : 'hover:bg-black hover:bg-opacity-10'
+                }`}
+              title={isLocked ? 'Unlock color' : 'Lock color'}
+            >
+              {isLocked ? (
+                <Lock className="w-5 h-5" />
+              ) : (
+                <Unlock className="w-5 h-5 opacity-60" />
+              )}
+            </button>
+            <InfoBadge
+              light={!isLight}
+              title="Fixed Anchor"
+              content="Baking this color prevents it from changing. It becomes the mathematical seed that others will align to."
+            />
+          </div>
 
           {/* Favorite Button */}
           <button
             onClick={() => onToggleFavorite?.(color)}
-            className={`p-2 rounded-full transition-all duration-200 ${
-              isFavorite 
-                ? 'bg-red-500 bg-opacity-20 backdrop-blur-sm' 
-                : 'hover:bg-black hover:bg-opacity-10'
-            }`}
+            className={`p-2 rounded-full transition-all duration-200 ${isFavorite
+              ? 'bg-red-500 bg-opacity-20 backdrop-blur-sm'
+              : 'hover:bg-black hover:bg-opacity-10'
+              }`}
             title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
           >
             <Heart className={`w-5 h-5 ${isFavorite ? 'fill-red-500 text-red-500' : 'opacity-60'}`} />
@@ -202,20 +218,32 @@ const ColorStrip = ({
                   onCheckContrast?.(index);
                   setShowMenu(false);
                 }}
-                className="flex items-center w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100"
+                className="flex items-center justify-between w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100"
               >
-                <Eye className="w-4 h-4 mr-3" />
-                Check Contrast
+                <div className="flex items-center">
+                  <Eye className="w-4 h-4 mr-3" />
+                  Check Contrast
+                </div>
+                <InfoBadge
+                  title="A11y Check"
+                  content="Verify WCAG 2.2 readability ratios against text."
+                />
               </button>
               <button
                 onClick={() => {
                   onViewShades?.(index);
                   setShowMenu(false);
                 }}
-                className="flex items-center w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100"
+                className="flex items-center justify-between w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100"
               >
-                <Layers className="w-4 h-4 mr-3" />
-                View Shades
+                <div className="flex items-center">
+                  <Layers className="w-4 h-4 mr-3" />
+                  View Shades
+                </div>
+                <InfoBadge
+                  title="Hue Variants"
+                  content="Explore tints and tones of this specific hue."
+                />
               </button>
               {canRemove && (
                 <>
