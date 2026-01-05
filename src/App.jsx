@@ -125,7 +125,7 @@ export default function App() {
 
   return (
     <HistoryProvider>
-    <div className="relative h-screen font-sans bg-gray-100">
+    <div className="relative h-screen font-sans bg-gray-100 flex flex-col overflow-hidden">
       {/* Top Bar */}
       <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-gray-200">
         <div className="flex items-center space-x-4">

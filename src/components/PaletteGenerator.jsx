@@ -9,7 +9,10 @@ import {
   Lock,
   Unlock,
   Shuffle,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Plus,
+  Minus,
+  Keyboard
 } from 'lucide-react';
 import { colord, extend } from 'colord';
 import harmonies from 'colord/plugins/harmonies';
@@ -26,8 +29,11 @@ import ImageExtractor from './ImageExtractor';
 import HistoryTimeline from './HistoryTimeline';
 import ColorBlindnessSimulator from './ColorBlindnessSimulator';
 import UIPreview from './UIPreview';
+import DarkModeGenerator from './DarkModeGenerator';
+import GradientGenerator from './GradientGenerator';
+import DesignTokenExport from './DesignTokenExport';
 import { useHistory } from '../context/HistoryContext';
-import { Palette as PaletteIcon, Layout, Info, HelpCircle, FileText, Eye, Monitor } from 'lucide-react';
+import { Palette as PaletteIcon, Layout, Info, HelpCircle, FileText, Eye, Monitor, Moon, Layers, Code2 } from 'lucide-react';
 
 const InfoBadge = ({ content, title }) => (
   <div className="group relative inline-flex items-center">
@@ -62,6 +68,9 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
   const [showImageExtractor, setShowImageExtractor] = useState(false);
   const [showColorBlindness, setShowColorBlindness] = useState(false);
   const [showUIPreview, setShowUIPreview] = useState(false);
+  const [showDarkModeGenerator, setShowDarkModeGenerator] = useState(false);
+  const [showGradientGenerator, setShowGradientGenerator] = useState(false);
+  const [showDesignTokenExport, setShowDesignTokenExport] = useState(false);
   const [primarySeed, setPrimarySeed] = useState('#6366f1');
 
   // Generate a random color
@@ -333,6 +342,28 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
     setPaletteSize(newColors.length);
   };
 
+  // Add a new color to palette
+  const addColor = () => {
+    if (colors.length >= 10) return; // Maximum 10 colors
+
+    const newColor = generateRandomColor();
+    setColors([...colors, newColor]);
+    setLockedColors([...lockedColors, false]);
+    setPaletteSize(colors.length + 1);
+  };
+
+  // Remove last color from palette
+  const removeLastColor = () => {
+    if (colors.length <= 3) return; // Minimum 3 colors
+
+    const newColors = colors.slice(0, -1);
+    const newLockedColors = lockedColors.slice(0, -1);
+
+    setColors(newColors);
+    setLockedColors(newLockedColors);
+    setPaletteSize(newColors.length);
+  };
+
   // Check contrast for a color
   const checkContrast = (index) => {
     setSelectedColorIndex(index);
@@ -498,7 +529,7 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-screen">
+    <div className="flex-1 flex flex-col h-full w-full">
       {/* Header Controls */}
       <div className="bg-white border-b border-gray-200 px-4 md:px-6 py-3 md:py-4 sticky top-0 z-20">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
@@ -560,6 +591,45 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
                   content="Switch between algorithms. Monotone uses value shifts; Duotone uses complements (180°); Tritone uses balanced triads (120°)."
                 />
               </div>
+
+              {/* Palette Size Control */}
+              <div className="flex items-center gap-1.5">
+                <div className="flex items-center bg-gray-100 rounded-lg">
+                  <button
+                    onClick={removeLastColor}
+                    disabled={colors.length <= 3}
+                    className="p-1.5 hover:bg-gray-200 rounded-l-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Remove color (min 3)"
+                  >
+                    <Minus className="w-3.5 h-3.5 text-gray-600" />
+                  </button>
+                  <span className="px-2 text-xs font-bold text-gray-700 min-w-[2rem] text-center">
+                    {colors.length}
+                  </span>
+                  <button
+                    onClick={addColor}
+                    disabled={colors.length >= 10}
+                    className="p-1.5 hover:bg-gray-200 rounded-r-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Add color (max 10)"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-gray-600" />
+                  </button>
+                </div>
+                <InfoBadge
+                  title="Palette Size"
+                  content="Adjust the number of colors in your palette (3-10 colors)."
+                />
+              </div>
+
+              {/* Keyboard Shortcuts */}
+              <div className="hidden lg:flex items-center gap-1.5 text-[10px] text-gray-400 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">
+                <Keyboard className="w-3 h-3" />
+                <span>SPACE: Generate</span>
+                <span className="text-gray-300">•</span>
+                <span>CTRL+Z: Undo</span>
+                <span className="text-gray-300">•</span>
+                <span>CTRL+1-9: Lock</span>
+              </div>
             </div>
           </div>
 
@@ -568,7 +638,7 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
               {/* Lock All / Unlock All */}
               <div className="flex items-center space-x-1 border-r border-gray-100 pr-2">
                 <button
-                  onClick={() => setLockedColors(lockedColors.every(locked => locked) ? new Array(5).fill(false) : new Array(5).fill(true))}
+                  onClick={() => setLockedColors(lockedColors.every(locked => locked) ? new Array(colors.length).fill(false) : new Array(colors.length).fill(true))}
                   className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
                   title={lockedColors.every(locked => locked) ? 'Unlock all' : 'Lock all'}
                 >
@@ -643,6 +713,51 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
                   content="See how your palette looks on real UI components like buttons, cards, and forms."
                 />
               </div>
+
+              {/* Dark Mode Generator */}
+              <div className="flex items-center space-x-1">
+                <button
+                  onClick={() => setShowDarkModeGenerator(true)}
+                  className="flex items-center space-x-2 bg-gray-800 text-white px-3 py-2 rounded-lg hover:bg-gray-900 transition-colors border border-gray-700 shadow-sm"
+                >
+                  <Moon className="w-3.5 h-3.5" />
+                  <span className="font-bold text-xs">Dark</span>
+                </button>
+                <InfoBadge
+                  title="Dark Mode"
+                  content="Generate a complementary dark theme from your current palette."
+                />
+              </div>
+
+              {/* Gradient Generator */}
+              <div className="flex items-center space-x-1">
+                <button
+                  onClick={() => setShowGradientGenerator(true)}
+                  className="flex items-center space-x-2 bg-gradient-to-r from-pink-500 to-violet-500 text-white px-3 py-2 rounded-lg hover:from-pink-600 hover:to-violet-600 transition-colors shadow-sm"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span className="font-bold text-xs">Gradient</span>
+                </button>
+                <InfoBadge
+                  title="Gradients"
+                  content="Create beautiful CSS gradients using your palette colors."
+                />
+              </div>
+
+              {/* Design Token Export */}
+              <div className="flex items-center space-x-1">
+                <button
+                  onClick={() => setShowDesignTokenExport(true)}
+                  className="flex items-center space-x-2 bg-violet-100 text-violet-700 px-3 py-2 rounded-lg hover:bg-violet-200 transition-colors border border-violet-200 shadow-sm"
+                >
+                  <Code2 className="w-3.5 h-3.5" />
+                  <span className="font-bold text-xs">Tokens</span>
+                </button>
+                <InfoBadge
+                  title="Design Tokens"
+                  content="Export your palette as design tokens for Style Dictionary, Tailwind, CSS variables, and more."
+                />
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
@@ -695,7 +810,7 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
       }
 
       {/* Color Strips */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+      <div className="flex-1 flex flex-col md:flex-row w-full min-h-0">
         {colors.map((color, index) => (
           <ColorStrip
             key={`${color}-${index}`}
@@ -718,19 +833,6 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
             isGenerating={isGenerating}
           />
         ))}
-      </div>
-
-      {/* Bottom Info Bar */}
-      <div className="bg-white border-t border-gray-200 px-6 py-3">
-        <div className="flex items-center justify-between text-sm text-gray-600">
-          <div className="flex items-center space-x-4">
-            <span>Colors: {colors.length}</span>
-            <span>Locked: {lockedColors.filter(locked => locked).length}</span>
-          </div>
-          <div className="flex items-center space-x-4 text-xs">
-            <span>SPACEBAR: Generate • CTRL+Z: Undo • CTRL+1-9: Lock • CTRL+C: Copy</span>
-          </div>
-        </div>
       </div>
 
       {/* History Timeline */}
@@ -801,6 +903,40 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
         <UIPreview
           colors={colors}
           onClose={() => setShowUIPreview(false)}
+        />
+      )}
+
+      {/* Dark Mode Generator Modal */}
+      {showDarkModeGenerator && (
+        <DarkModeGenerator
+          colors={colors}
+          onClose={() => setShowDarkModeGenerator(false)}
+          onApplyDarkPalette={(darkColors) => {
+            setColors(darkColors);
+            setLockedColors(new Array(darkColors.length).fill(false));
+            setPaletteSize(darkColors.length);
+            if (darkColors.length > 0) {
+              setPrimarySeed(darkColors[0]);
+            }
+            setKeyboardFeedback('Dark palette applied');
+            setTimeout(() => setKeyboardFeedback(null), 2000);
+          }}
+        />
+      )}
+
+      {/* Gradient Generator Modal */}
+      {showGradientGenerator && (
+        <GradientGenerator
+          colors={colors}
+          onClose={() => setShowGradientGenerator(false)}
+        />
+      )}
+
+      {/* Design Token Export Modal */}
+      {showDesignTokenExport && (
+        <DesignTokenExport
+          colors={colors}
+          onClose={() => setShowDesignTokenExport(false)}
         />
       )}
     </div >
