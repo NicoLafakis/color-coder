@@ -8,7 +8,8 @@ import {
   Settings,
   Lock,
   Unlock,
-  Shuffle
+  Shuffle,
+  Image as ImageIcon
 } from 'lucide-react';
 import { colord, extend } from 'colord';
 import harmonies from 'colord/plugins/harmonies';
@@ -21,7 +22,12 @@ import ContrastChecker from './ContrastChecker';
 import ShadesViewer from './ShadesViewer';
 import DesignPrinciples from './DesignPrinciples';
 import PaletteExportModal from './PaletteExportModal';
-import { Palette as PaletteIcon, Layout, Info, HelpCircle, FileText } from 'lucide-react';
+import ImageExtractor from './ImageExtractor';
+import HistoryTimeline from './HistoryTimeline';
+import ColorBlindnessSimulator from './ColorBlindnessSimulator';
+import UIPreview from './UIPreview';
+import { useHistory } from '../context/HistoryContext';
+import { Palette as PaletteIcon, Layout, Info, HelpCircle, FileText, Eye, Monitor } from 'lucide-react';
 
 const InfoBadge = ({ content, title }) => (
   <div className="group relative inline-flex items-center">
@@ -36,6 +42,8 @@ const InfoBadge = ({ content, title }) => (
 );
 
 const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
+  const { pushState, undo, redo, isNavigating, setIsNavigating } = useHistory();
+
   const [colors, setColors] = useState([]);
   const [lockedColors, setLockedColors] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -51,6 +59,9 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
   const [generationMode, setGenerationMode] = useState('random'); // random, monotone, duotone, tritone
   const [showDesignPrinciples, setShowDesignPrinciples] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showImageExtractor, setShowImageExtractor] = useState(false);
+  const [showColorBlindness, setShowColorBlindness] = useState(false);
+  const [showUIPreview, setShowUIPreview] = useState(false);
   const [primarySeed, setPrimarySeed] = useState('#6366f1');
 
   // Generate a random color
@@ -187,6 +198,52 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
     }
   }, []);
 
+  // Handle restoring palette from history
+  const handleRestorePalette = useCallback((entry) => {
+    if (!entry) return;
+
+    setIsNavigating(true);
+    setColors(entry.colors);
+    setLockedColors(entry.lockedIndices || new Array(entry.colors.length).fill(false));
+    setPaletteSize(entry.colors.length);
+    if (entry.harmonyMode) {
+      setGenerationMode(entry.harmonyMode);
+    }
+    if (entry.colors.length > 0) {
+      setPrimarySeed(entry.colors[0]);
+    }
+
+    setKeyboardFeedback('Restored from history');
+    setTimeout(() => setKeyboardFeedback(null), 1500);
+  }, [setIsNavigating]);
+
+  // Handle undo action
+  const handleUndo = useCallback(() => {
+    const entry = undo();
+    if (entry) {
+      handleRestorePalette(entry);
+    }
+  }, [undo, handleRestorePalette]);
+
+  // Handle redo action
+  const handleRedo = useCallback(() => {
+    const entry = redo();
+    if (entry) {
+      handleRestorePalette(entry);
+    }
+  }, [redo, handleRestorePalette]);
+
+  // Push to history when colors change (not during navigation)
+  useEffect(() => {
+    if (colors.length > 0 && !isNavigating) {
+      pushState({
+        colors,
+        lockedIndices: lockedColors,
+        harmonyMode: generationMode
+      });
+    }
+  }, [colors, lockedColors, generationMode, pushState, isNavigating]);
+
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (event) => {
@@ -199,6 +256,21 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
       if (event.code === 'Space') {
         event.preventDefault();
         generatePalette(true); // Keep locked colors
+        return;
+      }
+
+      // CTRL + Z - Undo
+      if (event.ctrlKey && !event.shiftKey && event.code === 'KeyZ') {
+        event.preventDefault();
+        handleUndo();
+        return;
+      }
+
+      // CTRL + SHIFT + Z or CTRL + Y - Redo
+      if ((event.ctrlKey && event.shiftKey && event.code === 'KeyZ') ||
+          (event.ctrlKey && event.code === 'KeyY')) {
+        event.preventDefault();
+        handleRedo();
         return;
       }
 
@@ -233,7 +305,7 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [generatePalette]);
+  }, [generatePalette, handleUndo, handleRedo]);
 
   // Toggle lock for a specific color
   const toggleLock = (index) => {
@@ -407,6 +479,24 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
     console.log('Color copied:', colorValue);
   };
 
+  // Handle colors extracted from image
+  const handleExtractedColors = (extractedColors) => {
+    // Set the palette to the extracted colors
+    const newColors = extractedColors.slice(0, 10); // Max 10 colors
+    setColors(newColors);
+    setLockedColors(new Array(newColors.length).fill(false));
+    setPaletteSize(newColors.length);
+
+    // Set the first color as the primary seed
+    if (newColors.length > 0) {
+      setPrimarySeed(newColors[0]);
+    }
+
+    // Show feedback
+    setKeyboardFeedback(`Loaded ${newColors.length} colors from image`);
+    setTimeout(() => setKeyboardFeedback(null), 2000);
+  };
+
   return (
     <div className="flex-1 flex flex-col min-h-screen">
       {/* Header Controls */}
@@ -508,6 +598,51 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
                   content="Analyze WCAG 2.2 accessibility and brand psychology."
                 />
               </div>
+
+              {/* Image Extractor */}
+              <div className="flex items-center space-x-1">
+                <button
+                  onClick={() => setShowImageExtractor(true)}
+                  className="flex items-center space-x-2 bg-emerald-50 text-emerald-700 px-3 py-2 rounded-lg hover:bg-emerald-100 transition-colors border border-emerald-100 shadow-sm"
+                >
+                  <ImageIcon className="w-3.5 h-3.5" />
+                  <span className="font-bold text-xs">Extract</span>
+                </button>
+                <InfoBadge
+                  title="Image Colors"
+                  content="Upload an image to extract its dominant colors as a palette."
+                />
+              </div>
+
+              {/* Color Blindness Simulator */}
+              <div className="flex items-center space-x-1">
+                <button
+                  onClick={() => setShowColorBlindness(true)}
+                  className="flex items-center space-x-2 bg-purple-50 text-purple-700 px-3 py-2 rounded-lg hover:bg-purple-100 transition-colors border border-purple-100 shadow-sm"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span className="font-bold text-xs">CVD</span>
+                </button>
+                <InfoBadge
+                  title="Color Vision"
+                  content="Simulate how your palette appears to people with color vision deficiency."
+                />
+              </div>
+
+              {/* UI Preview */}
+              <div className="flex items-center space-x-1">
+                <button
+                  onClick={() => setShowUIPreview(true)}
+                  className="flex items-center space-x-2 bg-blue-50 text-blue-700 px-3 py-2 rounded-lg hover:bg-blue-100 transition-colors border border-blue-100 shadow-sm"
+                >
+                  <Monitor className="w-3.5 h-3.5" />
+                  <span className="font-bold text-xs">Preview</span>
+                </button>
+                <InfoBadge
+                  title="Live Preview"
+                  content="See how your palette looks on real UI components like buttons, cards, and forms."
+                />
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
@@ -593,10 +728,13 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
             <span>Locked: {lockedColors.filter(locked => locked).length}</span>
           </div>
           <div className="flex items-center space-x-4 text-xs">
-            <span>SPACEBAR: Generate • CTRL+1-9: Lock/Unlock • CTRL+C: Copy</span>
+            <span>SPACEBAR: Generate • CTRL+Z: Undo • CTRL+1-9: Lock • CTRL+C: Copy</span>
           </div>
         </div>
       </div>
+
+      {/* History Timeline */}
+      <HistoryTimeline onRestorePalette={handleRestorePalette} />
 
       {/* Contrast Checker Modal */}
       {
@@ -639,6 +777,30 @@ const PaletteGenerator = ({ onSavePalette, onShowSettings }) => {
         <PaletteExportModal
           colors={colors}
           onClose={() => setShowExportModal(false)}
+        />
+      )}
+
+      {/* Image Extractor Modal */}
+      {showImageExtractor && (
+        <ImageExtractor
+          onExtractColors={handleExtractedColors}
+          onClose={() => setShowImageExtractor(false)}
+        />
+      )}
+
+      {/* Color Blindness Simulator Modal */}
+      {showColorBlindness && (
+        <ColorBlindnessSimulator
+          colors={colors}
+          onClose={() => setShowColorBlindness(false)}
+        />
+      )}
+
+      {/* UI Preview Modal */}
+      {showUIPreview && (
+        <UIPreview
+          colors={colors}
+          onClose={() => setShowUIPreview(false)}
         />
       )}
     </div >

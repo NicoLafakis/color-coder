@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Palette, 
+import {
+  Palette,
   X,
   Settings as SettingsIcon,
   Save
@@ -11,6 +11,7 @@ import names from "colord/plugins/names";
 import PaletteGenerator from './components/PaletteGenerator';
 import PaletteSidebar from './components/PaletteSidebar';
 import SwatchEditor from './components/SwatchEditor';
+import { HistoryProvider } from './context/HistoryContext';
 
 // Setup the colord library with necessary plugins
 extend([harmonies, names]);
@@ -123,6 +124,7 @@ export default function App() {
   };
 
   return (
+    <HistoryProvider>
     <div className="relative h-screen font-sans bg-gray-100">
       {/* Top Bar */}
       <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-gray-200">
@@ -245,5 +247,6 @@ export default function App() {
         />
       )}
     </div>
+    </HistoryProvider>
   );
 }
